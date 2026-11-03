@@ -1,0 +1,1932 @@
+<!DOCTYPE html>
+<html lang="hr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BGGds Studio</title>
+
+<link rel="manifest" href="./manifest.json">
+
+<!-- BGGds stylesheet: jsDelivr primary, raw.github fallback -->
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/kr10o/DesignSystems@main/bggds.css"
+      onerror="this.onerror=null;this.href='https://raw.githubusercontent.com/kr10o/DesignSystems/refs/heads/main/bggds.css'">
+
+<!-- third-party UMD -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/4.0.11/dexie.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.3/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.2/feather.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- BGGds interaction layer (classic script): jsDelivr primary, raw.github fallback -->
+<script src="https://cdn.jsdelivr.net/gh/kr10o/DesignSystems@main/bggds-interaction.js"
+        defer
+        onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/kr10o/DesignSystems/refs/heads/main/bggds-interaction.js'"></script>
+
+<!-- BGGds modules: jsDelivr primary, raw.github fallback; SW from local /service-worker.js -->
+<script type="module">
+  (async () => {
+    const loadWithFallback = async (sources, label) => {
+      for (let i = 0; i < sources.length; i++) {
+        try {
+          await import(sources[i]);
+          return true;
+        } catch (err) {
+          const isLast = i === sources.length - 1;
+          if (isLast) {
+            console.error('[loader] All sources failed for ' + label + ':', err);
+          } else {
+            console.warn('[loader] ' + label + ' failed at ' + sources[i] + ' — trying fallback');
+          }
+        }
+      }
+      return false;
+    };
+
+    // DB module — jsDelivr then raw.github
+    loadWithFallback([
+      'https://cdn.jsdelivr.net/gh/kr10o/DesignSystems@main/bggds-db.js',
+      'https://raw.githubusercontent.com/kr10o/DesignSystems/refs/heads/main/bggds-db.js'
+    ], 'BGGdsDB');
+
+    // Service worker module — local only
+    loadWithFallback(['/service-worker.js'], 'BGGdsSW');
+  })();
+</script>
+
+<!-- XSLT 1.0 stylesheet (inert; parsed once at boot) -->
+<script type="application/xml" id="module-xslt">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="html" omit-xml-declaration="yes" indent="no"/>
+  <xsl:param name="mode" select="'card'"/>
+
+  <xsl:template match="/bggds-module">
+    <xsl:choose>
+      <xsl:when test="$mode = 'card'"><xsl:call-template name="card"/></xsl:when>
+      <xsl:otherwise><xsl:call-template name="standalone"/></xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+  <xsl:template name="card">
+    <article class="bgg-card bgg-card-{style} proportional-card"
+             data-id="{id}" data-title="{title}" data-cat="{category}"
+             data-style="{style}" data-md="{md}" data-pct="{pct}">
+      <xsl:attribute name="style">--card-flex-pct: <xsl:value-of select="pct"/>%;</xsl:attribute>
+      <div class="bgg-card-header">
+        <div style="display:flex;align-items:center;gap:5px;min-width:0">
+          <span class="bgg-drag-handle" aria-hidden="true">⋮⋮</span>
+          <span class="bgg-pill-icon bgg-pill-{style}"><xsl:value-of select="category"/></span>
+          <span class="bgg-card-title"><xsl:value-of select="title"/></span>
+        </div>
+        <div class="bgg-card-controls">
+          <button class="bgg-ctrl-btn" data-act="edit" title="Edit module" aria-label="Edit module">
+            <i data-feather="edit-3"></i>
+          </button>
+          <button class="bgg-ctrl-btn bgg-ctrl-btn-danger" data-act="remove" title="Remove module" aria-label="Remove module">
+            <i data-feather="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-content-viewport">
+        <div class="bgg-card-body bgg-md-rendered" data-hydrate="1"><xsl:value-of select="rendered-html"/></div>
+        <div class="card-overflow-mask">
+          <strong>Content exceeds module</strong>
+          <button class="bgg-btn bgg-btn-prompt" data-act="edit">Open Editor ⤢</button>
+        </div>
+      </div>
+      <div class="edge-resizer-r" data-resize-target="card"></div>
+      <div class="edge-resizer-b" data-resize-target="card"></div>
+      <div class="edge-resizer-br" data-resize-target="card">◢</div>
+    </article>
+  </xsl:template>
+
+  <xsl:template name="standalone">
+    <article class="bgg-card bgg-card-{style}" style="max-width:860px;margin:0 auto">
+      <header class="bgg-card-header">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="bgg-pill-icon bgg-pill-{style}"><xsl:value-of select="category"/></span>
+          <h1 class="bgg-card-title"><xsl:value-of select="title"/></h1>
+        </div>
+        <span class="bgg-badge"><xsl:value-of select="canvas-title"/> (<xsl:value-of select="canvas-dim"/>)</span>
+      </header>
+      <section class="bgg-card-body bgg-md-rendered" data-hydrate="1"><xsl:value-of select="rendered-html"/></section>
+      <xsl:if test="string-length(ai-note) &gt; 0">
+        <footer class="bgg-page-footer"><span><strong>AI:</strong> <xsl:value-of select="ai-note"/></span></footer>
+      </xsl:if>
+    </article>
+  </xsl:template>
+
+  <xsl:template match="text()"/>
+</xsl:stylesheet>
+</script>
+</head>
+<body class="bgg-unified">
+
+<header class="studio-top-bar bgg-no-print">
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="icon-btn" data-cmd="canvas-add" title="Add canvas" aria-label="Add canvas"><i data-feather="plus-square"></i></button>
+    <button class="icon-btn" data-cmd="module-add" title="Add module to first canvas" aria-label="Add module"><i data-feather="file-plus"></i></button>
+    <button class="icon-btn" data-cmd="zip" title="Download workspace as ZIP" aria-label="Download ZIP"><i data-feather="download"></i></button>
+    <button class="icon-btn danger" data-cmd="reset" title="Reset database" aria-label="Reset database"><i data-feather="trash-2"></i></button>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;min-width:0">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Booting…</span>
+    <button class="room-pill" id="room-pill" data-cmd="copy-room" title="Copy room URL">------</button>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="icon-btn" data-cmd="settings" title="Settings" aria-label="Settings"><i data-feather="settings"></i></button>
+    <button class="icon-btn" data-cmd="inspector" title="Artifacts" aria-label="Artifacts"><i data-feather="code"></i></button>
+    <button class="icon-btn" data-cmd="sync" title="Sync room" aria-label="Sync room"><i data-feather="wifi"></i></button>
+    <button class="icon-btn" data-cmd="theme" title="Toggle theme" aria-label="Toggle theme"><i data-feather="moon"></i></button>
+  </div>
+</header>
+
+<main id="canvases-workspace" aria-live="polite"></main>
+
+<template id="initial-cards">
+  <div data-id="mod-01" data-title="Chrome Install" data-cat="ENV" data-style="prompt" data-pct="32"
+       data-md="### Instalacija&#10;* Instaliraj **Tampermonkey**&#10;* Pin ikonu&#10;* Developer mode"></div>
+  <div data-id="mod-02" data-title="LLM Prompt" data-cat="PROMPT" data-style="prompt" data-pct="34"
+       data-md="### Prompt Arhitektura&#10;* **Uloga:** Senior Userscript Engineer&#10;* **Scope:** `*.example.com`"></div>
+  <div data-id="mod-03" data-title="Master Prompt" data-cat="IIFE" data-style="syntax" data-pct="34"
+       data-md="### Master Prompt&#10;```javascript&#10;(function(){ 'use strict'; })();&#10;```"></div>
+  <div data-id="mod-04" data-title="Dependencies" data-cat="CDN" data-style="syntax" data-pct="33"
+       data-md="### @require&#10;* cdnjs, jsDelivr, unpkg&#10;* UMD / IIFE only"></div>
+  <div data-id="mod-05" data-title="GM Sandbox" data-cat="API" data-style="api" data-pct="33"
+       data-md="### GM_* API&#10;* `@grant none`&#10;* `GM_setValue`&#10;* `GM_xmlhttpRequest`"></div>
+  <div data-id="mod-06" data-title="SPA Optimization" data-cat="PERF" data-style="success" data-pct="34"
+       data-md="### SPA &amp; DOM&#10;* MutationObserver&#10;* rAF debouncing&#10;* DOMPurify"></div>
+  <div data-id="mod-07" data-title="LLM Prohibitions" data-cat="WARN" data-style="warning" data-pct="45"
+       data-md="### Critical Prohibitions&#10;* No ESM&#10;* No eval()&#10;* No placeholders"></div>
+  <div data-id="mod-08" data-title="Scriptlet Bridge" data-cat="EXT" data-style="api" data-pct="55"
+       data-md="### Scriptlet Bridge&#10;* Carrd / SPA hook&#10;* Local API proxy"></div>
+</template>
+
+<!-- ============ Editor ============ -->
+<div id="modal-editor" class="bgg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+  <div class="bgg-modal-window fullscreen-split-window">
+    <div class="bgg-modal-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <strong id="editor-title">Markdown Editor</strong>
+        <input type="text" id="editor-name" class="bgg-input" style="width:180px" placeholder="Title…">
+        <select id="editor-style" class="bgg-select">
+          <option value="prompt">Prompt</option>
+          <option value="syntax">Syntax</option>
+          <option value="api">API</option>
+          <option value="success">Success</option>
+          <option value="warning">Warning</option>
+        </select>
+        <select id="editor-canvas" class="bgg-select"></select>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="icon-btn" data-cmd="editor-save" title="Save" aria-label="Save"><i data-feather="save"></i></button>
+        <button class="icon-btn" data-cmd="close" data-target="modal-editor" title="Close" aria-label="Close"><i data-feather="x"></i></button>
+      </div>
+    </div>
+    <div class="split-50-50-container">
+      <div class="split-pane">
+        <strong>Markdown</strong>
+        <textarea id="editor-md" class="full-textarea" spellcheck="false" placeholder="Markdown…"></textarea>
+      </div>
+      <div class="split-pane">
+        <strong>Preview</strong>
+        <div id="editor-preview" class="full-preview bgg-md-rendered"></div>
+      </div>
+    </div>
+    <div class="edge-resizer-r" data-resize-target="window"></div>
+    <div class="edge-resizer-b" data-resize-target="window"></div>
+    <div class="edge-resizer-br" data-resize-target="window">◢</div>
+  </div>
+</div>
+
+<!-- ============ Inspector ============ -->
+<div id="modal-inspector" class="bgg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
+  <div class="bgg-modal-window fullscreen-split-window">
+    <div class="bgg-modal-header">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <strong id="inspector-title">Artifacts</strong>
+        <select id="artifact-select" class="bgg-select"></select>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="icon-btn" data-cmd="artifact-copy" title="Copy" aria-label="Copy"><i data-feather="copy"></i></button>
+        <button class="icon-btn" data-cmd="artifact-download" title="Download selected" aria-label="Download selected"><i data-feather="download"></i></button>
+        <button class="icon-btn" data-cmd="artifact-download-all" title="Download all" aria-label="Download all"><i data-feather="archive"></i></button>
+        <button class="icon-btn" data-cmd="close" data-target="modal-inspector" title="Close" aria-label="Close"><i data-feather="x"></i></button>
+      </div>
+    </div>
+    <div class="bgg-modal-body" style="display:flex;flex-direction:column;gap:8px">
+      <div id="artifact-status" class="bgg-badge"></div>
+      <div class="split-50-50-container" style="padding:0;flex:1 1 auto;min-height:0">
+        <div class="split-pane">
+          <strong>Iframe preview</strong>
+          <iframe id="artifact-frame" class="iframe-preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+        <div class="split-pane">
+          <strong>XML source</strong>
+          <textarea id="artifact-code" class="full-textarea" readonly></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="edge-resizer-r" data-resize-target="window"></div>
+    <div class="edge-resizer-b" data-resize-target="window"></div>
+    <div class="edge-resizer-br" data-resize-target="window">◢</div>
+  </div>
+</div>
+
+<!-- ============ Settings ============ -->
+<div id="modal-settings" class="bgg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="bgg-modal-window" style="width:min(520px,92vw)">
+    <div class="bgg-modal-header">
+      <strong id="settings-title">Settings</strong>
+      <button class="icon-btn" data-cmd="close" data-target="modal-settings" title="Close" aria-label="Close"><i data-feather="x"></i></button>
+    </div>
+    <div class="bgg-modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <label style="display:block">
+        <span style="display:block;font-weight:700;margin-bottom:4px">Google API key</span>
+        <input type="password" id="settings-key" class="bgg-input" style="width:100%" placeholder="AIzaSy…" autocomplete="off">
+      </label>
+      <label style="display:block">
+        <span style="display:block;font-weight:700;margin-bottom:4px">Model</span>
+        <select id="settings-model" class="bgg-select" style="width:100%">
+          <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+          <option value="local-nlp">Local NLP (no API)</option>
+        </select>
+      </label>
+      <div>
+        <span style="display:block;font-weight:700;margin-bottom:4px">Data</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="bgg-btn bgg-btn-prompt" data-cmd="zip"><i data-feather="download"></i>ZIP</button>
+          <button class="bgg-btn bgg-btn-neutral" data-cmd="export-json"><i data-feather="download"></i>JSON</button>
+          <button class="bgg-btn bgg-btn-neutral" data-cmd="import-json"><i data-feather="upload"></i>Import</button>
+          <button class="bgg-btn bgg-btn-warning" data-cmd="reset"><i data-feather="trash-2"></i>Reset</button>
+        </div>
+      </div>
+    </div>
+    <div class="bgg-modal-footer">
+      <span>Changes apply immediately</span>
+      <button class="bgg-btn bgg-btn-neutral" data-cmd="close" data-target="modal-settings">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Canvas dimensions ============ -->
+<div id="modal-canvas" class="bgg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="canvas-title">
+  <div class="bgg-modal-window" style="width:min(420px,92vw)">
+    <div class="bgg-modal-header">
+      <strong id="canvas-title">Canvas dimensions</strong>
+      <button class="icon-btn" data-cmd="close" data-target="modal-canvas" title="Close" aria-label="Close"><i data-feather="x"></i></button>
+    </div>
+    <div class="bgg-modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <label style="display:block">
+        <span style="display:block;font-weight:700;margin-bottom:4px">Title</span>
+        <input type="text" id="canvas-name" class="bgg-input" style="width:100%">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label style="display:block">
+          <span style="display:block;font-weight:700;margin-bottom:4px">Width (mm)</span>
+          <input type="number" id="canvas-w" class="bgg-input" min="80" max="800" style="width:100%">
+        </label>
+        <label style="display:block">
+          <span style="display:block;font-weight:700;margin-bottom:4px">Height (mm)</span>
+          <input type="number" id="canvas-h" class="bgg-input" min="80" max="800" style="width:100%">
+        </label>
+      </div>
+    </div>
+    <div class="bgg-modal-footer">
+      <button class="bgg-btn bgg-btn-neutral" data-cmd="close" data-target="modal-canvas">Cancel</button>
+      <button class="bgg-btn bgg-btn-prompt" data-cmd="canvas-apply">Apply &amp; fit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Sync ============ -->
+<div id="modal-sync" class="bgg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+  <div class="bgg-modal-window" style="width:min(680px,94vw)">
+    <div class="bgg-modal-header">
+      <strong id="sync-title">Sync room</strong>
+      <button class="icon-btn" data-cmd="close" data-target="modal-sync" title="Close" aria-label="Close"><i data-feather="x"></i></button>
+    </div>
+    <div class="bgg-modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div style="padding:10px 12px;border-left:3px solid var(--bgg-success);background:rgba(16,185,129,.1);border-radius:4px">
+        <div style="font-weight:700;margin-bottom:4px">Room code</div>
+        <div id="sync-code" style="font-family:var(--bgg-mono);letter-spacing:.1em;font-weight:800;color:var(--bgg-success)">------</div>
+        <div style="margin-top:6px;color:var(--bgg-text-muted)">
+          Anyone with this URL joins the room. State is AES-GCM encrypted and synced over BroadcastChannel.
+        </div>
+      </div>
+      <label style="display:block">
+        <span style="display:block;font-weight:700;margin-bottom:4px">Share URL</span>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="sync-url" class="bgg-input" readonly style="flex:1">
+          <button class="icon-btn" data-cmd="copy-room" title="Copy URL" aria-label="Copy URL"><i data-feather="link"></i></button>
+        </div>
+      </label>
+      <div id="sync-status" class="bgg-badge" style="padding:8px">Status: initialising</div>
+      <details>
+        <summary style="cursor:pointer;font-weight:700">Cross-device (WebRTC, manual SDP)</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+          <button class="bgg-btn bgg-btn-prompt" data-cmd="rtc-offer">Host: generate offer</button>
+          <textarea id="rtc-offer-out" class="sync-sdp" readonly placeholder="Offer SDP…"></textarea>
+          <button class="bgg-btn bgg-btn-neutral" data-cmd="copy" data-copy="rtc-offer-out">Copy offer</button>
+          <textarea id="rtc-answer-in" class="sync-sdp" placeholder="Paste answer SDP…"></textarea>
+          <button class="bgg-btn bgg-btn-success" data-cmd="rtc-answer-apply">Apply answer</button>
+        </div>
+      </details>
+      <details>
+        <summary style="cursor:pointer;font-weight:700">Join: accept offer</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+          <textarea id="rtc-offer-in" class="sync-sdp" placeholder="Paste offer SDP…"></textarea>
+          <button class="bgg-btn bgg-btn-prompt" data-cmd="rtc-accept">Generate answer</button>
+          <textarea id="rtc-answer-out" class="sync-sdp" readonly placeholder="Answer SDP…"></textarea>
+          <button class="bgg-btn bgg-btn-neutral" data-cmd="copy" data-copy="rtc-answer-out">Copy answer</button>
+        </div>
+      </details>
+    </div>
+    <div class="bgg-modal-footer">
+      <span>Same browser: instant. Cross-device: WebRTC.</span>
+      <button class="bgg-btn bgg-btn-neutral" data-cmd="close" data-target="modal-sync">Close</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* =====================================================================
+   BGGds Studio — application controller
+   ===================================================================== */
+const CSS_URL   = 'https://cdn.jsdelivr.net/gh/kr10o/DesignSystems@main/bggds.css';
+const LS_WORK   = 'bggds.workspace';
+const LS_THEME  = 'bggds.theme';
+const LS_KEY    = 'bggds.apiKey';
+const LS_MODEL  = 'bggds.model';
+const LS_ROOM   = 'bggds.room';
+
+const MY_ID          = 'p' + Math.random().toString(36).slice(2, 10);
+const ROOM_PREFIX    = 'bggds.room.';
+const HEARTBEAT_MS   = 5000;
+const PEER_TIMEOUT   = 30000;
+const CARDS_PER_PAGE = 9;
+const PX_PER_MM      = 3.779527559;
+const DEBOUNCE_MS    = 280;
+
+const $  = (id) => document.getElementById(id);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+const state = {
+  canvases: [],
+  editingCard: null,
+  canvasSettingsId: null,
+  artifacts: { modules: {}, llmsTxt: '', lastUpdated: '' },
+  xslt: null,
+  pipelineTimer: 0,
+  resizeCtx: null,
+  room: null,
+  rtc: { pc: null, dc: null },
+  booted: false
+};
+
+/* ---------- misc ---------- */
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ESC_MAP[c]);
+
+function slugify(s) {
+  return String(s || 'module').toLowerCase()
+    .replace(/[čć]/g, 'c').replace(/ž/g, 'z').replace(/š/g, 's').replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'module';
+}
+
+function setStatus(kind, text) {
+  const dot = $('status-dot');
+  const txt = $('status-text');
+  if (dot) dot.className = 'status-dot' + (kind ? ' ' + kind : '');
+  if (txt) txt.textContent = text;
+}
+
+let iconTimer = 0;
+function refreshIcons() {
+  if (iconTimer) return;
+  iconTimer = requestAnimationFrame(() => {
+    iconTimer = 0;
+    if (!window.feather) return;
+    try { window.feather.replace({ 'stroke-width': 2 }); } catch (_) {}
+  });
+}
+
+function mdToHtml(md) {
+  if (!window.marked || !window.DOMPurify) return esc(md || '');
+  try {
+    const raw = window.marked.parse(String(md || ''), { gfm: true, breaks: true });
+    return window.DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+  } catch (_) {
+    return esc(md || '');
+  }
+}
+
+/* ---------- boot helpers ---------- */
+function waitFor(fn, label, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    if (fn()) return resolve(true);
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (fn()) { clearInterval(iv); resolve(true); }
+      else if (Date.now() - t0 > timeout) {
+        clearInterval(iv);
+        reject(new Error(label + ' not ready after ' + timeout + 'ms'));
+      }
+    }, 50);
+  });
+}
+
+const dbReady  = () => waitFor(() => window.BGGdsDB && window.BGGdsDB.__version, 'BGGdsDB');
+const ixnReady = () => waitFor(() => window.BGGdsInteraction && window.BGGdsInteraction.isActive(), 'BGGdsInteraction', 4000);
+
+/* =====================================================================
+   XSLT
+   ===================================================================== */
+function loadXslt() {
+  const el = $('module-xslt');
+  if (!el) throw new Error('XSLT template missing');
+  const doc = new DOMParser().parseFromString(el.textContent, 'application/xml');
+  const err = doc.querySelector('parsererror');
+  if (err) throw new Error('XSLT parse error: ' + err.textContent);
+  state.xslt = doc;
+}
+
+/**
+ * Render a module into a DOM element via XSLT.
+ * `rendered-html` is emitted as an escaped text node and re-hydrated here,
+ * because disable-output-escaping is not portable across engines.
+ */
+function renderCard(mod) {
+  if (!window.BGGdsDB) throw new Error('BGGdsDB missing');
+  const xml = window.BGGdsDB.moduleToXml(mod);
+  const src = window.BGGdsDB.prepareModuleXmlForXslt(xml);
+
+  const proc = new XSLTProcessor();
+  proc.importStylesheet(state.xslt);
+  proc.setParameter(null, 'mode', 'card');
+
+  const frag = proc.transformToFragment(src, document);
+  const host = document.createElement('div');
+  host.appendChild(frag);
+  const card = host.firstElementChild;
+  if (!card) throw new Error('XSLT produced no output');
+
+  hydrate(card);
+  return card;
+}
+
+function hydrate(root) {
+  $$('[data-hydrate="1"]', root).forEach((el) => {
+    if (el.firstElementChild) return;   // already real DOM
+    const text = el.textContent;
+    if (text && /^\s*</.test(text)) el.innerHTML = text;
+    el.removeAttribute('data-hydrate');
+  });
+}
+
+/* =====================================================================
+   Geometry
+   ===================================================================== */
+function availSheetHeight() {
+  const ws = $('canvases-workspace');
+  if (!ws) return Math.max(240, window.innerHeight - 84);
+  const cs = getComputedStyle(ws);
+  const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  return Math.max(240, ws.clientHeight - pad);
+}
+
+function sheetSizeFor(canvasObj) {
+  if (canvasObj.manualPx && canvasObj.manualPx.w && canvasObj.manualPx.h) {
+    return { w: canvasObj.manualPx.w, h: canvasObj.manualPx.h, manual: true };
+  }
+  const h = availSheetHeight();
+  const ratio = (canvasObj.wMm || 297) / (canvasObj.hMm || 210);
+  return { w: Math.round(h * ratio), h: h, manual: false };
+}
+
+function applySheetSize(sheet, canvasObj) {
+  const s = sheetSizeFor(canvasObj);
+  sheet.style.width = s.w + 'px';
+  sheet.style.minWidth = s.w + 'px';
+  sheet.style.height = s.h + 'px';
+  sheet.style.minHeight = s.h + 'px';
+  if (s.manual) {
+    sheet.style.maxWidth = 'none';
+    sheet.style.maxHeight = s.h + 'px';
+    sheet.setAttribute('data-manual-size', 'true');
+  } else {
+    sheet.style.maxWidth = s.w + 'px';
+    sheet.style.maxHeight = s.h + 'px';
+    sheet.removeAttribute('data-manual-size');
+  }
+}
+
+function rescaleAllSheets() {
+  state.canvases.forEach((c) => {
+    const track = $('track-' + c.id);
+    if (!track) return;
+    $$('.proportional-sheet', track).forEach((sheet) => applySheetSize(sheet, c));
+  });
+  if (window.BGGdsInteraction) window.BGGdsInteraction.clamp();
+  checkOverflow();
+}
+
+/* =====================================================================
+   Overflow detection
+   ===================================================================== */
+let overflowObserver = null;
+function checkOverflow() {
+  if (!overflowObserver && 'ResizeObserver' in window) {
+    overflowObserver = new ResizeObserver(() => {
+      $$('.proportional-card').forEach(measureCard);
+    });
+  }
+  $$('.proportional-card').forEach(measureCard);
+}
+
+function measureCard(card) {
+  const vp = card.querySelector('.card-content-viewport');
+  const body = card.querySelector('.bgg-md-rendered');
+  if (!vp || !body) return;
+  const over = body.scrollHeight > vp.clientHeight + 6;
+  card.classList.toggle('is-overflowing', over);
+  if (overflowObserver && !card.__obs) {
+    overflowObserver.observe(vp);
+    card.__obs = true;
+  }
+}
+
+/* =====================================================================
+   Canvas DOM
+   ===================================================================== */
+function makeTrack(canvasObj) {
+  const track = document.createElement('div');
+  track.className = 'bgg-canvas-track';
+  track.id = 'track-' + canvasObj.id;
+  track.dataset.canvasId = canvasObj.id;
+  return track;
+}
+
+function makeSheet(canvasObj, pageIndex, pageTotal) {
+  const sheet = document.createElement('section');
+  sheet.className = 'proportional-sheet bgg-ambient-container';
+  sheet.dataset.wMm = canvasObj.wMm;
+  sheet.dataset.hMm = canvasObj.hMm;
+  sheet.dataset.pageIndex = pageIndex;
+  sheet.setAttribute('aria-label', canvasObj.title + ' page ' + pageIndex);
+
+  const label = pageTotal > 1 ? pageIndex + '/' + pageTotal : String(pageIndex);
+
+  sheet.innerHTML =
+    '<div class="bgg-ambient-glow bgg-glow-1"></div>' +
+    '<div class="bgg-ambient-glow bgg-glow-2"></div>' +
+    '<div class="bgg-ambient-glow bgg-glow-3"></div>' +
+    '<div class="bgg-ambient-glow bgg-glow-4"></div>' +
+    '<div class="canvas-controls">' +
+      '<button class="canvas-ctrl" data-action="dims" title="Canvas dimensions" aria-label="Canvas dimensions"><i data-feather="sliders"></i></button>' +
+      '<button class="canvas-ctrl" data-action="add" title="Add module here" aria-label="Add module here"><i data-feather="file-plus"></i></button>' +
+      '<button class="canvas-ctrl" data-action="delete" title="Delete canvas" aria-label="Delete canvas"><i data-feather="trash-2"></i></button>' +
+    '</div>' +
+    '<div class="canvas-page-badge">' + label + '</div>' +
+    '<div class="proportional-grid">' +
+      '<div class="proportional-col" data-col="0"></div>' +
+      '<div class="proportional-col" data-col="1"></div>' +
+      '<div class="proportional-col" data-col="2"></div>' +
+    '</div>' +
+    '<div class="edge-resizer-r" data-resize-target="canvas"></div>' +
+    '<div class="edge-resizer-b" data-resize-target="canvas"></div>' +
+    '<div class="edge-resizer-br" data-resize-target="canvas">◢</div>';
+
+  applySheetSize(sheet, canvasObj);
+  return sheet;
+}
+
+function normaliseColumnHeights(track) {
+  $$('.proportional-col', track).forEach((col) => {
+    const cards = Array.from(col.children).filter((el) => el.classList.contains('proportional-card'));
+    if (!cards.length) return;
+    const pct = (100 / cards.length).toFixed(2);
+    cards.forEach((card) => {
+      card.style.setProperty('--card-flex-pct', pct + '%');
+      card.dataset.pct = pct;
+    });
+  });
+}
+
+/**
+ * Re-layout one canvas: pull every card out, rebuild pages, redistribute.
+ */
+function paginateCanvas(canvasId) {
+  const c = state.canvases.find((x) => x.id === canvasId);
+  const track = $('track-' + canvasId);
+  if (!c || !track) return;
+
+  const cards = $$('.proportional-card', track);
+  const pages = Math.max(1, Math.ceil(cards.length / CARDS_PER_PAGE));
+
+  track.textContent = '';
+  for (let p = 0; p < pages; p++) {
+    const sheet = makeSheet(c, p + 1, pages);
+    const cols = $$('.proportional-col', sheet);
+    cards.slice(p * CARDS_PER_PAGE, (p + 1) * CARDS_PER_PAGE)
+      .forEach((card, i) => cols[i % 3].appendChild(card));
+    track.appendChild(sheet);
+  }
+
+  normaliseColumnHeights(track);
+  initSortable();
+  refreshIcons();
+
+  requestAnimationFrame(() => {
+    rescaleAllSheets();
+    checkOverflow();
+    scheduleCompile();
+  });
+}
+
+/* =====================================================================
+   Sortable
+   ===================================================================== */
+function initSortable() {
+  if (!window.Sortable) return;
+  $$('.proportional-col').forEach((col) => {
+    if (col.__sortable) col.__sortable.destroy();
+    col.__sortable = new window.Sortable(col, {
+      group: 'bggds-cards',
+      animation: 150,
+      handle: '.bgg-drag-handle',
+      ghostClass: 'sortable-ghost',
+      onEnd: (evt) => {
+        const from = evt.from.closest('.bgg-canvas-track');
+        const to = evt.to.closest('.bgg-canvas-track');
+        const ids = new Set();
+        if (from) ids.add(from.dataset.canvasId);
+        if (to) ids.add(to.dataset.canvasId);
+        ids.forEach((id) => { if (id) paginateCanvas(id); });
+        broadcast();
+      }
+    });
+  });
+}
+
+/* =====================================================================
+   Card factory
+   ===================================================================== */
+function cardFrom(el) {
+  return {
+    id: el.getAttribute('data-id') || 'mod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+    canvasId: el.closest('.bgg-canvas-track')?.dataset.canvasId || '',
+    canvasTitle: '',
+    canvasDim: '',
+    title: el.getAttribute('data-title') || 'Module',
+    category: el.getAttribute('data-cat') || 'MD',
+    style: el.getAttribute('data-style') || 'prompt',
+    pct: el.getAttribute('data-pct') || '32',
+    md: el.getAttribute('data-md') || '',
+    renderedHtml: el.querySelector('.bgg-md-rendered')?.innerHTML || ''
+  };
+}
+
+function makeCard(raw) {
+  const c = state.canvases.find((x) => x.id === raw.canvasId);
+  const mod = {
+    id: raw.id || 'mod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+    canvasId: raw.canvasId || '',
+    canvasTitle: c ? c.title : '',
+    canvasDim: c ? c.wMm + '×' + c.hMm + 'mm' : '',
+    title: raw.title || 'Module',
+    category: raw.cat || raw.category || 'MD',
+    style: raw.style || 'prompt',
+    pct: raw.pct || '32',
+    md: raw.md || '',
+    renderedHtml: (raw.renderedHtml && raw.renderedHtml.trim()) || mdToHtml(raw.md || '')
+  };
+  return renderCard(mod);
+}
+
+/* =====================================================================
+   Canvas CRUD
+   ===================================================================== */
+function addCanvas(seed) {
+  const prev = state.canvases[state.canvases.length - 1];
+  const canvas = {
+    id: 'canvas-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+    title: (seed && seed.title) || ('Canvas #' + (state.canvases.length + 1)),
+    wMm: (seed && seed.wMm) || (prev ? prev.wMm : 297),
+    hMm: (seed && seed.hMm) || (prev ? prev.hMm : 210),
+    manualPx: null
+  };
+  state.canvases.push(canvas);
+
+  const track = makeTrack(canvas);
+  $('canvases-workspace').appendChild(track);
+
+  const first = makeCard({
+    canvasId: canvas.id,
+    title: canvas.title + ' — first module',
+    cat: 'MD',
+    style: 'prompt',
+    pct: '45',
+    md: '### ' + canvas.title + '\n* **XML:** stored as XML\n* **Iframe:** preview in inspector'
+  });
+  const sheet = makeSheet(canvas, 1, 1);
+  sheet.querySelector('.proportional-col').appendChild(first);
+  track.appendChild(sheet);
+
+  paginateCanvas(canvas.id);
+  refreshCanvasSelect();
+  broadcast();
+  return canvas;
+}
+
+function removeCanvas(canvasId) {
+  const i = state.canvases.findIndex((c) => c.id === canvasId);
+  if (i === -1) return;
+  if (!confirm('Delete this canvas and all its modules?')) return;
+  state.canvases.splice(i, 1);
+  const track = $('track-' + canvasId);
+  if (track) track.remove();
+  if (!state.canvases.length) bootstrapDefaultCanvas();
+  refreshCanvasSelect();
+  scheduleCompile();
+  broadcast();
+}
+
+function addModuleToFirstCanvas() {
+  if (!state.canvases.length) { addCanvas(); return; }
+  openEditor(null, state.canvases[0].id);
+}
+
+/* =====================================================================
+   Canvas settings
+   ===================================================================== */
+function openCanvasSettings(canvasId) {
+  const c = state.canvases.find((x) => x.id === canvasId);
+  if (!c) return;
+  state.canvasSettingsId = canvasId;
+  $('canvas-name').value = c.title;
+  $('canvas-w').value = c.wMm;
+  $('canvas-h').value = c.hMm;
+  show('modal-canvas');
+}
+
+function applyCanvasSettings() {
+  const c = state.canvases.find((x) => x.id === state.canvasSettingsId);
+  if (!c) { hide('modal-canvas'); return; }
+  c.title = ($('canvas-name').value || '').trim() || c.title;
+  c.wMm = Math.min(800, Math.max(80, parseInt($('canvas-w').value, 10) || 297));
+  c.hMm = Math.min(800, Math.max(80, parseInt($('canvas-h').value, 10) || 210));
+  c.manualPx = null;                       // reset manual override, re-fit
+  hide('modal-canvas');
+  rescaleAllSheets();
+  broadcast();
+}
+
+/* =====================================================================
+   Editor
+   ===================================================================== */
+function refreshCanvasSelect() {
+  const sel = $('editor-canvas');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.textContent = '';
+  state.canvases.forEach((c) => {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.title + ' (' + c.wMm + '×' + c.hMm + 'mm)';
+    sel.appendChild(o);
+  });
+  if (prev && state.canvases.some((c) => c.id === prev)) sel.value = prev;
+}
+
+function openEditor(triggerEl, canvasId) {
+  refreshCanvasSelect();
+  const card = triggerEl ? triggerEl.closest('.proportional-card') : null;
+  state.editingCard = card;
+
+  if (card) {
+    $('editor-name').value = card.getAttribute('data-title') || '';
+    $('editor-style').value = card.getAttribute('data-style') || 'prompt';
+    $('editor-md').value = card.getAttribute('data-md') || '';
+    const track = card.closest('.bgg-canvas-track');
+    if (track) $('editor-canvas').value = track.dataset.canvasId;
+  } else {
+    $('editor-name').value = 'New module';
+    $('editor-style').value = 'prompt';
+    $('editor-md').value = '### New module\n* **XML:** stored as XML\n* **Iframe:** preview';
+    if (canvasId) $('editor-canvas').value = canvasId;
+  }
+
+  updatePreview();
+  show('modal-editor');
+  setTimeout(() => $('editor-md').focus(), 30);
+}
+
+function updatePreview() {
+  $('editor-preview').innerHTML = mdToHtml($('editor-md').value);
+}
+
+function saveEditor() {
+  const title = ($('editor-name').value || '').trim() || 'Module';
+  const style = $('editor-style').value;
+  const canvasId = $('editor-canvas').value;
+  const md = $('editor-md').value;
+  const canvas = state.canvases.find((c) => c.id === canvasId);
+  if (!canvas) { hide('modal-editor'); return; }
+
+  const rendered = mdToHtml(md);
+
+  if (state.editingCard && state.editingCard.isConnected) {
+    const fresh = makeCard({
+      id: state.editingCard.getAttribute('data-id'),
+      canvasId: canvasId,
+      title: title,
+      cat: state.editingCard.getAttribute('data-cat') || 'MD',
+      style: style,
+      pct: state.editingCard.getAttribute('data-pct') || '32',
+      md: md,
+      renderedHtml: rendered
+    });
+    state.editingCard.replaceWith(fresh);
+  } else {
+    const track = $('track-' + canvasId);
+    if (!track) { hide('modal-editor'); return; }
+    let sheet = track.querySelector('.proportional-sheet:last-child');
+    if (!sheet) {
+      sheet = makeSheet(canvas, 1, 1);
+      track.appendChild(sheet);
+    }
+    sheet.querySelector('.proportional-col').appendChild(makeCard({
+      canvasId: canvasId,
+      title: title,
+      cat: 'MD',
+      style: style,
+      md: md,
+      renderedHtml: rendered
+    }));
+  }
+
+  state.editingCard = null;
+  hide('modal-editor');
+  paginateCanvas(canvasId);
+  broadcast();
+}
+
+/* =====================================================================
+   Modals
+   ===================================================================== */
+function show(id) { const el = $(id); if (el) el.classList.add('active'); refreshIcons(); }
+function hide(id) { const el = $(id); if (el) el.classList.remove('active'); }
+
+/* =====================================================================
+   Inspector
+   ===================================================================== */
+function openInspector() {
+  refreshArtifactSelect();
+  show('modal-inspector');
+}
+
+function refreshArtifactSelect() {
+  const sel = $('artifact-select');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.textContent = '';
+
+  const llms = document.createElement('option');
+  llms.value = '__llms__';
+  llms.textContent = 'llms.txt';
+  sel.appendChild(llms);
+
+  Object.keys(state.artifacts.modules).forEach((id) => {
+    const m = state.artifacts.modules[id];
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = m.fileName || m.title || id;
+    sel.appendChild(o);
+  });
+
+  if (prev && (prev === '__llms__' || state.artifacts.modules[prev])) sel.value = prev;
+  renderArtifact();
+}
+
+function renderArtifact() {
+  const sel = $('artifact-select');
+  const code = $('artifact-code');
+  const frame = $('artifact-frame');
+  const status = $('artifact-status');
+  if (!sel || !code || !frame || !status) return;
+
+  const v = sel.value;
+  if (v === '__llms__') {
+    status.textContent = 'llms.txt · ' + (state.artifacts.lastUpdated || '—');
+    code.value = state.artifacts.llmsTxt || '';
+    frame.srcdoc = '<pre style="padding:14px;font-family:monospace;white-space:pre-wrap">' +
+      esc(state.artifacts.llmsTxt || '') + '</pre>';
+    return;
+  }
+
+  const m = state.artifacts.modules[v];
+  if (!m) return;
+  status.textContent = (m.fileName || v) + ' · ' + (state.artifacts.lastUpdated || '—');
+  code.value = m.xml || '';
+  frame.srcdoc = m.html || '';
+}
+
+async function copyArtifact() {
+  const code = $('artifact-code');
+  if (!code) return;
+  try { await navigator.clipboard.writeText(code.value); }
+  catch (_) { code.select(); document.execCommand('copy'); }
+}
+
+function downloadArtifact() {
+  const sel = $('artifact-select');
+  if (!sel) return;
+  const v = sel.value;
+  if (v === '__llms__') {
+    saveBlob('llms.txt', state.artifacts.llmsTxt || '', 'text/plain;charset=utf-8');
+    return;
+  }
+  const m = state.artifacts.modules[v];
+  if (!m) return;
+  saveBlob(m.fileName || slugify(m.title) + '.html', m.html || '', 'text/html;charset=utf-8');
+}
+
+function downloadAllArtifacts() {
+  saveBlob('llms.txt', state.artifacts.llmsTxt || '', 'text/plain;charset=utf-8');
+  Object.keys(state.artifacts.modules).forEach((id, i) => {
+    const m = state.artifacts.modules[id];
+    setTimeout(() => saveBlob(m.fileName || slugify(m.title) + '.html', m.html || '', 'text/html;charset=utf-8'), (i + 1) * 200);
+  });
+}
+
+function saveBlob(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* =====================================================================
+   Compile pipeline
+   ===================================================================== */
+function scheduleCompile() {
+  clearTimeout(state.pipelineTimer);
+  state.pipelineTimer = setTimeout(compile, DEBOUNCE_MS);
+}
+
+async function compile() {
+  if (!window.BGGdsDB) return;
+  setStatus('working', 'Compiling…');
+
+  const modules = [];
+  state.canvases.forEach((c) => {
+    const track = $('track-' + c.id);
+    if (!track) return;
+    $$('.proportional-card', track).forEach((el) => {
+      modules.push({
+        id: el.getAttribute('data-id'),
+        canvasId: c.id,
+        canvasTitle: c.title,
+        canvasDim: c.wMm + '×' + c.hMm + 'mm',
+        title: el.getAttribute('data-title') || 'Module',
+        category: el.getAttribute('data-cat') || 'MD',
+        style: el.getAttribute('data-style') || 'prompt',
+        pct: el.getAttribute('data-pct') || '32',
+        md: el.getAttribute('data-md') || '',
+        renderedHtml: el.querySelector('.bgg-md-rendered')?.innerHTML || ''
+      });
+    });
+  });
+
+  const map = {};
+  const lines = [
+    '# BGGds Studio — NLP corpus',
+    '> Generated: ' + new Date().toISOString() + ' | Modules: ' + modules.length,
+    ''
+  ];
+
+  modules.forEach((m) => {
+    const fileName = slugify(m.title) + '-' + m.id + '.html';
+    map[m.id] = {
+      moduleId: m.id,
+      canvasId: m.canvasId,
+      title: m.title,
+      fileName: fileName,
+      xml: window.BGGdsDB.moduleToXml(m),
+      html: window.BGGdsDB.buildIframeHtml(m, CSS_URL),
+      md: m.md,
+      updatedAt: new Date().toISOString()
+    };
+    const brief = m.md.replace(/```[\s\S]*?```/g, '[code]').replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    lines.push('- **[' + m.title + '](' + fileName + ')** (' + m.canvasTitle + '): ' + brief);
+  });
+
+  let llms = lines.join('\n');
+  const marker = '### [GEMINI ENRICHMENT]';
+  const prevAi = state.artifacts.llmsTxt.indexOf(marker);
+  if (prevAi !== -1) llms += '\n\n' + state.artifacts.llmsTxt.slice(prevAi);
+
+  const apiKey = (localStorage.getItem(LS_KEY) || '').trim();
+  const model = localStorage.getItem(LS_MODEL) || 'local-nlp';
+
+  if (apiKey && model !== 'local-nlp' && modules.length) {
+    setStatus('working', 'AI enriching ' + modules.length + ' module(s)…');
+    try {
+      const prompt = 'Return strict JSON, no markdown fences:\n' +
+        '{"modules":{"<ID>":{"seoDescription":"<=150 chars","extraKeywords":"a, b, c","aiNote":"one sentence"}},"llmsAppendix":"extended guidance"}\n' +
+        'Input:\n' + JSON.stringify(modules.map((m) => ({ id: m.id, title: m.title, md: m.md })));
+
+      const res = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/' +
+        encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+          })
+        }
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      const data = await res.json();
+      const raw = data && data.candidates && data.candidates[0] &&
+        data.candidates[0].content && data.candidates[0].content.parts &&
+        data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        modules.forEach((m) => {
+          const e = parsed && parsed.modules && parsed.modules[m.id];
+          if (!e || !map[m.id]) return;
+          const enriched = Object.assign({}, m, { aiNote: e.aiNote || '' });
+          map[m.id].xml = window.BGGdsDB.moduleToXml(enriched);
+          map[m.id].html = window.BGGdsDB.buildIframeHtml(enriched, CSS_URL);
+          map[m.id].aiNote = e.aiNote || '';
+        });
+        if (parsed && parsed.llmsAppendix) {
+          llms = lines.join('\n') + '\n\n' + marker + ' (' + model + ')\n' + parsed.llmsAppendix;
+        }
+      }
+    } catch (err) {
+      console.warn('[compile] enrichment failed:', err);
+    }
+  }
+
+  state.artifacts.modules = map;
+  state.artifacts.llmsTxt = llms;
+  state.artifacts.lastUpdated = new Date().toLocaleTimeString();
+
+  try {
+    await window.BGGdsDB.saveArtifacts({ compiledMap: map, llmsTxt: llms, timestamp: state.artifacts.lastUpdated });
+  } catch (err) { console.warn('[compile] saveArtifacts:', err); }
+
+  if (window.BGGdsSW && window.BGGdsSW.isActive) {
+    const list = Object.keys(map).map((id) => ({ fileName: map[id].fileName, html: map[id].html }));
+    window.BGGdsSW.precacheArtifacts(list).catch(() => {});
+  }
+
+  setStatus('', (apiKey && model !== 'local-nlp' ? 'AI+XML' : 'XML') + ' · ' + state.artifacts.lastUpdated);
+
+  if ($('modal-inspector')?.classList.contains('active')) refreshArtifactSelect();
+}
+
+/* =====================================================================
+   Serialisation
+   ===================================================================== */
+function snapshot() {
+  return {
+    canvases: state.canvases.map((c) => {
+      const track = $('track-' + c.id);
+      return {
+        id: c.id,
+        title: c.title,
+        wMm: c.wMm,
+        hMm: c.hMm,
+        manualPx: c.manualPx || null,
+        cards: track ? $$('.proportional-card', track).map((el) => ({
+          id: el.getAttribute('data-id'),
+          title: el.getAttribute('data-title'),
+          cat: el.getAttribute('data-cat'),
+          style: el.getAttribute('data-style'),
+          md: el.getAttribute('data-md'),
+          pct: el.getAttribute('data-pct')
+        })) : []
+      };
+    }),
+    timestamp: Date.now()
+  };
+}
+
+function persistLocal() {
+  try { localStorage.setItem(LS_WORK, JSON.stringify(snapshot())); } catch (_) {}
+}
+
+function broadcast() {
+  const snap = snapshot();
+  persistLocal();
+  if (state.room) state.room.send({ type: 'state', payload: snap });
+}
+
+/* =====================================================================
+   Workspace restore
+   ===================================================================== */
+function clearWorkspaceDOM() {
+  state.canvases.length = 0;
+  const ws = $('canvases-workspace');
+  if (ws) ws.textContent = '';
+}
+
+function applySnapshot(payload) {
+  if (!payload || !Array.isArray(payload.canvases) || !payload.canvases.length) return;
+
+  clearWorkspaceDOM();
+  const ws = $('canvases-workspace');
+
+  payload.canvases.forEach((c) => {
+    const canvas = {
+      id: c.id || 'canvas-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+      title: c.title || 'Canvas',
+      wMm: Math.min(800, Math.max(80, Number(c.wMm) || 297)),
+      hMm: Math.min(800, Math.max(80, Number(c.hMm) || 210)),
+      manualPx: c.manualPx && c.manualPx.w && c.manualPx.h ? { w: c.manualPx.w, h: c.manualPx.h } : null
+    };
+    state.canvases.push(canvas);
+
+    const track = makeTrack(canvas);
+    ws.appendChild(track);
+
+    const sheet = makeSheet(canvas, 1, 1);
+    track.appendChild(sheet);
+
+    (c.cards || []).forEach((raw, i) => {
+      try {
+        const card = makeCard(Object.assign({}, raw, { canvasId: canvas.id }));
+        sheet.querySelector('.proportional-col[data-col="' + (i % 3) + '"]').appendChild(card);
+      } catch (err) {
+        console.warn('[restore] card failed:', err);
+      }
+    });
+  });
+
+  state.canvases.forEach((c) => paginateCanvas(c.id));
+  refreshCanvasSelect();
+  refreshIcons();
+  requestAnimationFrame(() => { rescaleAllSheets(); checkOverflow(); });
+}
+
+function bootstrapDefaultCanvas() {
+  const canvas = addCanvas({ title: 'Canvas #1', wMm: 297, hMm: 210 });
+  const track = $('track-' + canvas.id);
+  if (!track) return;
+  const sheet = track.querySelector('.proportional-sheet');
+  if (!sheet) return;
+
+  // replace the auto-created placeholder module with the seed set
+  const cols = $$('.proportional-col', sheet);
+  cols.forEach((col) => { col.textContent = ''; });
+
+  const tpl = $('initial-cards');
+  const seeds = tpl ? Array.from(tpl.content.children) : [];
+  seeds.forEach((el, i) => {
+    try {
+      cols[i % 3].appendChild(makeCard({
+        id: el.getAttribute('data-id'),
+        canvasId: canvas.id,
+        title: el.getAttribute('data-title'),
+        cat: el.getAttribute('data-cat'),
+        style: el.getAttribute('data-style'),
+        pct: el.getAttribute('data-pct'),
+        md: el.getAttribute('data-md')
+      }));
+    } catch (err) { console.warn('[seed]', err); }
+  });
+
+  paginateCanvas(canvas.id);
+}
+
+/* =====================================================================
+   Sync room
+   ===================================================================== */
+function createRoom(code) {
+  const room = {
+    code: code,
+    key: null,
+    channel: null,
+    peers: new Map(),
+    timer: 0,
+
+    async init() {
+      this.key = await deriveKey(code);
+      this.channel = new BroadcastChannel(ROOM_PREFIX + code);
+      this.channel.onmessage = (ev) => this.receive(ev.data);
+      this.timer = setInterval(() => this.tick(), HEARTBEAT_MS);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') this.send({ type: 'bye' });
+      });
+      setTimeout(() => this.send({ type: 'hello' }), 120);
+      setTimeout(() => this.refreshUI(), 200);
+      return this;
+    },
+
+    async send(obj) {
+      if (!this.channel) return;
+      try {
+        const payload = await encryptPayload(this.key, Object.assign({ from: MY_ID, ts: Date.now() }, obj));
+        this.channel.postMessage(payload);
+      } catch (err) {
+        console.warn('[room] send failed:', err);
+      }
+    },
+
+    async receive(data) {
+      if (!data || !data.iv || !data.ct) return;
+      let msg;
+      try { msg = await decryptPayload(this.key, data); }
+      catch (_) { return; }                     // wrong key or corrupt frame
+      if (!msg || msg.from === MY_ID) return;
+
+      this.peers.set(msg.from, Date.now());
+
+      if (msg.type === 'state' && msg.payload) applySnapshot(msg.payload);
+      else if (msg.type === 'hello') this.send({ type: 'state', payload: snapshot() });
+      else if (msg.type === 'sync-request') this.send({ type: 'state', payload: snapshot() });
+      else if (msg.type === 'bye') this.peers.delete(msg.from);
+
+      this.refreshUI();
+    },
+
+    tick() {
+      this.send({ type: 'ping' });
+      const now = Date.now();
+      Array.from(this.peers.entries()).forEach(([id, t]) => {
+        if (now - t > PEER_TIMEOUT) this.peers.delete(id);
+      });
+      this.refreshUI();
+    },
+
+    refreshUI() {
+      const n = this.peers.size;
+      const pill = $('room-pill');
+      if (pill) pill.textContent = this.code + ' · ' + (n + 1);
+      $('sync-code').textContent = this.code;
+      $('sync-url').value = this.url();
+      $('sync-status').textContent = 'Room ' + this.code + ' · ' + (n + 1) + ' peer(s) · live';
+
+      const syncBtn = document.querySelector('[data-cmd="sync"]');
+      if (syncBtn) {
+        syncBtn.dataset.active = n > 0 ? 'true' : 'false';
+        syncBtn.innerHTML = '<i data-feather="' + (n > 0 ? 'wifi' : 'wifi-off') + '"></i>';
+      }
+      refreshIcons();
+    },
+
+    url() {
+      const u = new URL(location.href);
+      u.hash = 'room=' + this.code;
+      return u.toString();
+    },
+
+    destroy() {
+      clearInterval(this.timer);
+      try { this.send({ type: 'bye' }); } catch (_) {}
+      if (this.channel) this.channel.close();
+    }
+  };
+  return room;
+}
+
+/* ---------- crypto ---------- */
+async function deriveKey(code) {
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('bggds-room-salt-v1'), iterations: 100000, hash: 'SHA-256' },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+function b64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function unb64(str) {
+  const raw = atob(str);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function encryptPayload(key, obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    new TextEncoder().encode(JSON.stringify(obj))
+  );
+  return { iv: b64(iv), ct: b64(new Uint8Array(ct)) };
+}
+
+async function decryptPayload(key, data) {
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: unb64(data.iv) },
+    key,
+    unb64(data.ct)
+  );
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+function newRoomCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buf = crypto.getRandomValues(new Uint8Array(8));
+  let out = '';
+  for (let i = 0; i < buf.length; i++) out += alphabet[buf[i] % alphabet.length];
+  return out;
+}
+
+async function initRoom() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  let code = (hash.get('room') || '').toUpperCase();
+  if (!/^[A-Z0-9]{8}$/.test(code)) code = newRoomCode();
+
+  const url = new URL(location.href);
+  url.hash = 'room=' + code;
+  history.replaceState(null, '', url.toString());
+
+  state.room = await createRoom(code).init();
+  try { localStorage.setItem(LS_ROOM, code); } catch (_) {}
+}
+
+/* =====================================================================
+   WebRTC (cross-device, manual SDP)
+   ===================================================================== */
+const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+function waitIce(pc) {
+  return new Promise((resolve) => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const done = () => {
+      if (pc.iceGatheringState !== 'complete') return;
+      pc.removeEventListener('icegatheringstatechange', done);
+      resolve();
+    };
+    pc.addEventListener('icegatheringstatechange', done);
+    setTimeout(resolve, 5000);
+  });
+}
+
+function bindDataChannel(dc) {
+  state.rtc.dc = dc;
+  dc.onopen = () => { try { dc.send(JSON.stringify({ type: 'state', payload: snapshot() })); } catch (_) {} };
+  dc.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg && msg.type === 'state' && msg.payload) applySnapshot(msg.payload);
+    } catch (_) {}
+  };
+}
+
+async function rtcOffer() {
+  try {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    state.rtc.pc = pc;
+    bindDataChannel(pc.createDataChannel('bggds'));
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitIce(pc);
+    $('rtc-offer-out').value = pc.localDescription.sdp;
+  } catch (err) {
+    alert('Offer failed: ' + err.message);
+  }
+}
+
+async function rtcAccept() {
+  const sdp = $('rtc-offer-in').value.trim();
+  if (!sdp) { alert('Paste an offer SDP first.'); return; }
+  try {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    state.rtc.pc = pc;
+    pc.ondatachannel = (ev) => bindDataChannel(ev.channel);
+    await pc.setRemoteDescription({ type: 'offer', sdp: sdp });
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitIce(pc);
+    $('rtc-answer-out').value = pc.localDescription.sdp;
+  } catch (err) {
+    alert('Answer failed: ' + err.message);
+  }
+}
+
+async function rtcApplyAnswer() {
+  const sdp = $('rtc-answer-in').value.trim();
+  if (!sdp) { alert('Paste an answer SDP first.'); return; }
+  try {
+    await state.rtc.pc.setRemoteDescription({ type: 'answer', sdp: sdp });
+  } catch (err) {
+    alert('Apply failed: ' + err.message);
+  }
+}
+
+/* =====================================================================
+   Theme
+   ===================================================================== */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+  const btn = document.querySelector('[data-cmd="theme"]');
+  if (btn) {
+    btn.innerHTML = '<i data-feather="' + (theme === 'dark' ? 'sun' : 'moon') + '"></i>';
+    refreshIcons();
+  }
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(LS_THEME, next); } catch (_) {}
+  applyTheme(next);
+}
+
+/* =====================================================================
+   ZIP export
+   ===================================================================== */
+async function exportZip() {
+  if (!window.JSZip) { alert('JSZip failed to load.'); return; }
+  setStatus('working', 'Building ZIP…');
+  try {
+    const zip = new window.JSZip();
+    const snap = snapshot();
+    snap.roomCode = state.room ? state.room.code : null;
+    zip.file('workspace.json', JSON.stringify(snap, null, 2));
+    if (state.artifacts.llmsTxt) zip.file('llms.txt', state.artifacts.llmsTxt);
+
+    const htmlDir = zip.folder('modules');
+    const xmlDir = zip.folder('xml');
+    Object.keys(state.artifacts.modules).forEach((id) => {
+      const m = state.artifacts.modules[id];
+      const base = (m.fileName || slugify(m.title) + '.html').replace(/\.html$/i, '');
+      if (m.html) htmlDir.file(base + '.html', m.html);
+      if (m.xml) xmlDir.file(base + '.xml', m.xml);
+    });
+
+    zip.file('README.txt',
+      'BGGds workspace export\n' +
+      'Generated: ' + new Date().toISOString() + '\n' +
+      'Canvases: ' + state.canvases.length + '\n' +
+      'Modules: ' + Object.keys(state.artifacts.modules).length + '\n\n' +
+      'workspace.json  layout + module data\n' +
+      'llms.txt        NLP corpus\n' +
+      'modules/*.html  standalone artifacts\n' +
+      'xml/*.xml       per-module XML source\n');
+
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    saveBlob('bggds-workspace-' + Date.now() + '.zip', blob, 'application/zip');
+    setStatus('', 'ZIP ready');
+  } catch (err) {
+    console.error('[zip]', err);
+    setStatus('error', 'ZIP failed');
+    alert('ZIP export failed: ' + err.message);
+  }
+}
+
+function saveBlob(name, data, mime) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* =====================================================================
+   JSON import / export
+   ===================================================================== */
+function exportJson() {
+  saveBlob('bggds-' + Date.now() + '.json', JSON.stringify({
+    workspace: snapshot(),
+    artifacts: state.artifacts,
+    exportedAt: new Date().toISOString()
+  }, null, 2), 'application/json');
+}
+
+function importJson() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (parsed.workspace) applySnapshot(parsed.workspace);
+      else if (parsed.canvases) applySnapshot(parsed);
+      broadcast();
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+  };
+  input.click();
+}
+
+/* =====================================================================
+   Reset
+   ===================================================================== */
+async function resetAll() {
+  if (!confirm('Reset everything? This clears the local database and workspace.')) return;
+  try { if (window.BGGdsDB) await window.BGGdsDB.resetAll(); } catch (_) {}
+  try { localStorage.removeItem(LS_WORK); } catch (_) {}
+  if (window.BGGdsSW && window.BGGdsSW.isActive) {
+    window.BGGdsSW.clearCachedArtifacts().catch(() => {});
+  }
+  const url = new URL(location.href);
+  url.hash = '';
+  location.replace(url.toString());
+}
+
+/* =====================================================================
+   Pointer resize — card + window only.
+   Canvas sheets are owned by BGGdsInteraction.
+   ===================================================================== */
+function onPointerDown(e) {
+  if (e.button !== 0 && e.pointerType === 'mouse') return;
+  const handle = e.target instanceof Element ? e.target.closest('[data-resize-target]') : null;
+  if (!handle) return;
+
+  const kind = handle.dataset.resizeTarget;
+
+  // Canvas handles are handled by BGGdsInteraction when it is alive.
+  if (kind === 'canvas' && window.BGGdsInteraction && window.BGGdsInteraction.isActive()) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const horiz = handle.classList.contains('edge-resizer-r') || handle.classList.contains('edge-resizer-br');
+  const vert = handle.classList.contains('edge-resizer-b') || handle.classList.contains('edge-resizer-br');
+
+  let ctx;
+  if (kind === 'card') {
+    const card = handle.closest('.proportional-card');
+    const col = card && card.closest('.proportional-col');
+    if (!card || !col) return;
+    ctx = {
+      kind: 'card', card: card, col: col, horiz: horiz, vert: vert,
+      w0: card.offsetHeight, h0: card.offsetHeight,
+      colH: col.clientHeight,
+      startX: startX, startY: startY
+    };
+    ctx.h0 = card.offsetHeight;
+  } else if (kind === 'window') {
+    const win = handle.closest('.bgg-modal-window');
+    if (!win) return;
+    const r = win.getBoundingClientRect();
+    ctx = { kind: 'window', win: win, horiz: horiz, vert: vert, w0: r.width, h0: r.height, startX: startX, startY: startY };
+  } else if (kind === 'canvas') {
+    const sheet = handle.closest('.proportional-sheet');
+    if (!sheet) return;
+    const r = sheet.getBoundingClientRect();
+    ctx = { kind: 'canvas', sheet: sheet, horiz: horiz, vert: vert, w0: r.width, h0: r.height, startX: startX, startY: startY };
+  } else {
+    return;
+  }
+
+  state.resizeCtx = ctx;
+  const prevCursor = document.body.style.cursor;
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = horiz && vert ? 'nwse-resize' : horiz ? 'ew-resize' : 'ns-resize';
+
+  function move(ev) {
+    const dx = ev.clientX - ctx.startX;
+    const dy = ev.clientY - ctx.startY;
+
+    if (ctx.kind === 'card') {
+      if (ctx.vert && ctx.colH > 0) {
+        const h = Math.max(40, ctx.h0 + dy);
+        const pct = Math.min(95, Math.max(10, (h / ctx.colH) * 100));
+        ctx.card.style.setProperty('--card-flex-pct', pct.toFixed(2) + '%');
+        ctx.card.dataset.pct = pct.toFixed(2);
+      }
+      if (ctx.horiz) {
+        const gridW = ctx.col.parentElement.clientWidth || 1;
+        const colW = ctx.col.getBoundingClientRect().width;
+        const target = Math.max(120, colW + dx);
+        const pct = Math.min(70, Math.max(12, (target / gridW) * 100));
+        ctx.col.style.flex = '1 1 ' + pct.toFixed(2) + '%';
+      }
+      measureCard(ctx.card);
+      return;
+    }
+
+    if (ctx.kind === 'window') {
+      if (ctx.horiz) ctx.win.style.width = Math.max(380, ctx.w0 + dx) + 'px';
+      if (ctx.vert) ctx.win.style.height = Math.max(260, ctx.h0 + dy) + 'px';
+      return;
+    }
+
+    if (ctx.kind === 'canvas') {
+      const cap = (window.BGGdsInteraction && window.BGGdsInteraction.maxSheetHeight)
+        ? window.BGGdsInteraction.maxSheetHeight(ctx.sheet)
+        : availSheetHeight();
+
+      if (ctx.horiz) {
+        const w = Math.max(320, ctx.w0 + dx);
+        ctx.sheet.style.width = w + 'px';
+        ctx.sheet.style.minWidth = w + 'px';
+        ctx.sheet.style.maxWidth = 'none';
+      }
+      if (ctx.vert) {
+        const h = Math.min(cap, Math.max(240, ctx.h0 + dy));
+        ctx.sheet.style.height = h + 'px';
+        ctx.sheet.style.minHeight = h + 'px';
+        ctx.sheet.style.maxHeight = cap + 'px';
+      }
+      measureCardsIn(ctx.sheet);
+    }
+  }
+
+  function finish() {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    document.body.style.cursor = prevCursor;
+    document.body.style.userSelect = '';
+    state.resizeCtx = null;
+
+    if (ctx.kind === 'canvas') {
+      ctx.sheet.setAttribute('data-manual-size', 'true');
+      const c = state.canvases.find((x) => x.id === ctx.sheet.closest('.bgg-canvas-track')?.dataset.canvasId);
+      if (c) c.manualPx = { w: ctx.sheet.offsetWidth, h: ctx.sheet.offsetHeight };
+    }
+    scheduleCompile();
+    broadcast();
+  }
+
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', finish);
+  window.addEventListener('pointercancel', finish);
+}
+
+function measureCardsIn(root) {
+  if (!root) return;
+  const cards = root.classList && root.classList.contains('proportional-card')
+    ? [root]
+    : $$('.proportional-card', root);
+  cards.forEach(measureCard);
+}
+
+/* =====================================================================
+   Command router
+   ===================================================================== */
+const COMMANDS = {
+  'canvas-add': () => addCanvas(),
+  'module-add': () => addModuleToFirstCanvas(),
+  'zip': () => exportZip(),
+  'reset': () => resetAll(),
+  'settings': () => {
+    $('settings-key').value = localStorage.getItem(LS_KEY) || '';
+    $('settings-model').value = localStorage.getItem(LS_MODEL) || 'local-nlp';
+    show('modal-settings');
+  },
+  'inspector': () => openInspector(),
+  'sync': () => { show('modal-sync'); if (state.room) state.room.refreshUI(); },
+  'theme': () => toggleTheme(),
+  'close': (el) => hide(el.dataset.target),
+  'editor-save': () => saveEditor(),
+  'canvas-apply': () => applyCanvasSettings(),
+  'artifact-copy': () => copyArtifact(),
+  'artifact-download': () => downloadArtifact(),
+  'artifact-download-all': () => downloadAllArtifacts(),
+  'export-json': () => exportJson(),
+  'import-json': () => importJson(),
+  'copy-room': async () => {
+    const url = state.room ? state.room.url() : location.href;
+    try { await navigator.clipboard.writeText(url); }
+    catch (_) {}
+    setStatus('', 'Room URL copied');
+    setTimeout(() => setStatus('', 'Ready'), 1500);
+  },
+  'rtc-offer': () => rtcOffer(),
+  'rtc-accept': () => rtcAccept(),
+  'rtc-answer-apply': () => rtcApplyAnswer(),
+  'copy': async (el) => {
+    const src = $(el.dataset.copy);
+    if (!src || !src.value) return;
+    try { await navigator.clipboard.writeText(src.value); }
+    catch (_) { src.select(); document.execCommand('copy'); }
+  }
+};
+
+document.addEventListener('click', (e) => {
+  const cmdEl = e.target instanceof Element ? e.target.closest('[data-cmd]') : null;
+  if (cmdEl) {
+    const fn = COMMANDS[cmdEl.dataset.cmd];
+    if (fn) { fn(cmdEl); return; }
+  }
+
+  const actionEl = e.target instanceof Element ? e.target.closest('[data-action]') : null;
+  if (actionEl) {
+    const sheet = actionEl.closest('.proportional-sheet');
+    const canvasId = sheet?.closest('.bgg-canvas-track')?.dataset.canvasId;
+    if (!canvasId) return;
+    const action = actionEl.dataset.action;
+    if (action === 'dims') openCanvasSettings(canvasId);
+    else if (action === 'add') openEditor(null, canvasId);
+    else if (action === 'delete') removeCanvas(canvasId);
+    return;
+  }
+
+  const actEl = e.target instanceof Element ? e.target.closest('[data-act]') : null;
+  if (actEl) {
+    const card = actEl.closest('.proportional-card');
+    if (!card) return;
+    if (actEl.dataset.act === 'edit') openEditor(actEl);
+    else if (actEl.dataset.act === 'remove') {
+      const track = card.closest('.bgg-canvas-track');
+      const canvasId = track?.dataset.canvasId;
+      card.remove();
+      if (canvasId) paginateCanvas(canvasId);
+      broadcast();
+    }
+    return;
+  }
+
+  // click on backdrop closes
+  if (e.target instanceof Element && e.target.classList.contains('bgg-modal-backdrop')) {
+    e.target.classList.remove('active');
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target === $('editor-md')) updatePreview();
+  else if (e.target === $('settings-key')) {
+    try { localStorage.setItem(LS_KEY, e.target.value.trim()); } catch (_) {}
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target === $('settings-model')) {
+    try { localStorage.setItem(LS_MODEL, e.target.value); } catch (_) {}
+    scheduleCompile();
+  } else if (e.target === $('artifact-select')) {
+    renderArtifact();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const open = document.querySelector('.bgg-modal-backdrop.active');
+    if (open) open.classList.remove('active');
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    if ($('modal-editor')?.classList.contains('active')) {
+      e.preventDefault();
+      saveEditor();
+    }
+  }
+});
+
+/* canvas resize → persist */
+document.addEventListener('bggds-canvas-resized', (e) => {
+  const d = e.detail || {};
+  if (!d.canvasId) return;
+  const c = state.canvases.find((x) => x.id === d.canvasId);
+  if (c) {
+    c.manualPx = { w: d.width, h: d.height };
+    c.wMm = Math.round(d.width / PX_PER_MM);
+    c.hMm = Math.round(d.height / PX_PER_MM);
+  }
+  measureCardsIn(d.sheet);
+  scheduleCompile();
+  broadcast();
+});
+
+window.addEventListener('beforeunload', () => {
+  persistLocal();
+});
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+async function boot() {
+  if (state.booted) return;
+  state.booted = true;
+
+  applyTheme(localStorage.getItem(LS_THEME) || 'light');
+  refreshIcons();
+
+  try { loadXslt(); }
+  catch (err) {
+    console.error(err);
+    setStatus('error', 'XSLT failed');
+    return;
+  }
+
+  // canvas-sheet resize fallback should not fight the interaction module
+  window.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('resize', () => { rescaleAllSheets(); });
+  window.addEventListener('orientationchange', () => setTimeout(rescaleAllSheets, 120));
+
+  try { await ixnReady(); }
+  catch (_) { console.warn('[boot] BGGdsInteraction unavailable — using fallback resize'); }
+
+  try { await dbReady(); }
+  catch (err) {
+    console.error(err);
+    setStatus('error', 'Database unavailable');
+    return;
+  }
+
+  try { await window.BGGdsDB.initDefaultScripts(); } catch (_) {}
+
+  /* restore */
+  let restored = false;
+
+  try {
+    const dbData = await window.BGGdsDB.loadWorkspace();
+    if (dbData && dbData.length) {
+      applySnapshot({
+        canvases: dbData.map((c) => ({
+          id: c.id,
+          title: c.title,
+          wMm: c.wMm,
+          hMm: c.hMm,
+          manualPx: c.manualW && c.manualH ? { w: c.manualW, h: c.manualH } : null,
+          cards: c.cards || []
+        }))
+      });
+      restored = true;
+    }
+  } catch (err) { console.warn('[boot] dexie restore:', err); }
+
+  if (!restored) {
+    try {
+      const raw = localStorage.getItem(LS_WORK);
+      if (raw) {
+        applySnapshot(JSON.parse(raw));
+        restored = true;
+      }
+    } catch (err) { console.warn('[boot] local restore:', err); }
+  }
+
+  if (!restored) bootstrapDefaultCanvas();
+
+  /* artifacts */
+  try {
+    const art = await window.BGGdsDB.loadArtifacts();
+    if (art) {
+      state.artifacts.modules = art.modules || {};
+      state.artifacts.llmsTxt = art.llmsTxt || '';
+      state.artifacts.lastUpdated = art.lastUpdated || '';
+    }
+  } catch (_) {}
+
+  /* room */
+  try { await initRoom(); }
+  catch (err) { console.warn('[boot] room init:', err); }
+
+  refreshIcons();
+  requestAnimationFrame(() => { rescaleAllSheets(); checkOverflow(); });
+
+  setStatus('', 'Ready');
+  scheduleCompile();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot, { once: true });
+} else {
+  boot();
+}
+
+/* re-measure when fonts settle */
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { checkOverflow(); }).catch(() => {});
+}
+
+/* expose for debugging / Tampermonkey hooks */
+window.BGGdsStudio = {
+  get state() { return state; },
+  snapshot: snapshot,
+  compile: compile,
+  broadcast: broadcast,
+  applySnapshot: applySnapshot,
+  addCanvas: addCanvas,
+  removeCanvas: removeCanvas
+};
+</script>
+</body>
+</html>
